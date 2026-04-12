@@ -1,0 +1,75 @@
+> **MacKeys — a Windows system tray application in C# (.NET) that remaps keyboard keys for Mac-to-Windows RDP sessions.**
+>
+> ### Constraints
+>
+> - **No 3rd-party NuGet packages.** Only use APIs from the .NET BCL and Windows SDK (System.Text.Json, System.Windows.Forms, System.Drawing, P/Invoke, etc.).
+> - **Target .NET 10** (LTS).
+>
+> ### Requirements
+>
+> Create a minimal-project WinForms C# app that:
+>
+> 1. **Runs elevated (as Administrator).** The app must embed a UAC application manifest (`app.manifest`) that requests `requireAdministrator` execution level. This is required so the low-level keyboard hook can intercept keystrokes even when the foreground window belongs to an elevated (admin) process. Without elevation, Windows UIPI (User Interface Privilege Isolation) silently blocks the hook from seeing keystrokes directed at higher-integrity processes.
+>
+> 2. **Lives in the system tray** with a custom icon (programmatically generated, no external `.ico` file) and a right-click context menu with:
+>    - A toggle item to enable/disable remapping
+>    - An "Exit" item
+>
+> 3. **Installs a low-level keyboard hook** using `SetWindowsHookEx` with `WH_KEYBOARD_LL` (13) via P/Invoke when toggled ON, and uninstalls it with `UnhookWindowsHookEx` when toggled OFF.
+>
+> 4. **Remaps the following keys** when the hook is active:
+>    - **Left Win** (`VK_LWIN = 0x5B`) → inject **Left Alt** (`VK_LMENU = 0xA4`) — Mac Left Cmd sits where Windows Left Alt is physically, so remap to match position
+>    - **Left Alt** (`VK_LMENU = 0xA4`) → inject **Left Win** (`VK_LWIN = 0x5B`) — Mac Left Option sits where Windows Left Win is physically, so remap to match position
+>    - **Right Alt** (`VK_RMENU = 0xA5`) → inject **Right Ctrl** (`VK_RCONTROL = 0xA3`) and suppress the original keystroke
+>    - **Right Win** (`VK_RWIN = 0x5C`) → inject **Right Alt** (`VK_RMENU = 0xA5`) and suppress the original keystroke
+>
+>    **Note:** The Left Win ↔ Left Alt is a two-way swap. The hook callback must handle this atomically (e.g., use the replacement VK code lookup before calling `SendInput`) to avoid infinite loops. The `LLKHF_INJECTED` flag check already prevents re-interception of injected keystrokes, which is what makes the swap safe.
+>
+> 5. **Uses `SendInput`** (not `keybd_event`) to inject the replacement keystrokes, with the `KEYEVENTF_EXTENDEDKEY` flag set for extended keys.
+>
+> 6. **Tray icon and tooltip** reflect the current state:
+>    - Active: green icon, tooltip "MacKeys: ON"
+>    - Inactive: gray icon, tooltip "MacKeys: OFF"
+>
+> 7. **Persists the last toggle state** in a JSON file (`settings.json`) next to the executable using `System.Text.Json`. Restores state on launch.
+>
+> 8. **Requires no installation** — runs as a standalone `.exe` via single-file publish.
+>
+> ### Technical Details
+>
+> - **P/Invoke:** Use `[DllImport("user32.dll")]` for `SetWindowsHookEx`, `UnhookWindowsHookEx`, `CallNextHookEx`, and `SendInput`. Use `[DllImport("kernel32.dll")]` for `GetModuleHandle`.
+> - **Delegate lifetime:** The `LowLevelKeyboardProc` delegate must be stored as a class-level field to prevent GC collection.
+> - **Message pump:** The hook must be installed on the main UI thread. `Application.Run()` with an `ApplicationContext` provides the Win32 message pump.
+> - **Hook callback logic:** When a matching VK code is detected on `WM_KEYDOWN`/`WM_SYSKEYDOWN` (and corresponding `WM_KEYUP`/`WM_SYSKEYUP`), suppress the event by returning `(IntPtr)1` and call `SendInput` with the replacement key.
+> - **Injection guard:** Check the `LLKHF_INJECTED` flag (bit 4, `0x10`) in the `KBDLLHOOKSTRUCT.flags` field to skip keystrokes injected by `SendInput`. This prevents the hook from re-intercepting its own injected keystrokes. This is more robust than a manual boolean flag because it is set atomically by the OS.
+> - **Hook timeout:** Keep the hook callback fast (no blocking I/O, no allocations on the hot path). Windows silently removes hooks whose callbacks exceed ~300ms.
+>
+> ### Project Structure
+>
+> ```
+> MacKeys/
+> ├── MacKeys.csproj
+> ├── app.manifest          ← UAC elevation manifest
+> └── Program.cs            ← entire app logic
+> ```
+>
+> **`MacKeys.csproj`** should set:
+> ```xml
+> <OutputType>WinExe</OutputType>
+> <TargetFramework>net10.0-windows</TargetFramework>
+> <UseWindowsForms>true</UseWindowsForms>
+> <Nullable>enable</Nullable>
+> <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+> <ApplicationManifest>app.manifest</ApplicationManifest>
+> <PublishSingleFile>true</PublishSingleFile>
+> <SelfContained>false</SelfContained>
+> ```
+>
+> **`app.manifest`** must include:
+> ```xml
+> <requestedExecutionLevel level="requireAdministrator" uiAccess="false" />
+> ```
+>
+> ### Deliverable
+>
+> Provide the complete `Program.cs`, `MacKeys.csproj`, and `app.manifest` files, ready to build with `dotnet build` and run on Windows. Add a brief comment block at the top of `Program.cs` explaining the key mappings so it's easy to extend later.

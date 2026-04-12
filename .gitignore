@@ -1,0 +1,15 @@
+# Build outputs
+bin/
+obj/
+deploy/
+
+# IDE
+.vs/
+*.user
+*.suo
+
+# Publish profiles
+Properties/PublishProfiles/
+
+# App settings (generated at runtime)
+settings.json
