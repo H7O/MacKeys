@@ -26,12 +26,25 @@ The left-side swap means **Cmd+Tab** does **Alt+Tab**, **Cmd+W** does **Alt+F4**
 - No external dependencies — pure .NET + P/Invoke
 - Runs elevated (required for the keyboard hook to work across all windows)
 
+## Download
+
+Grab the latest release for your architecture:
+
+**[→ Download from Releases](https://github.com/H7O/MacKeys/releases/latest)**
+
+| File | Architecture |
+|---|---|
+| `MacKeys-win-x64.zip` | Intel / AMD (most PCs) |
+| `MacKeys-win-arm64.zip` | ARM64 (Surface Pro X, etc.) |
+
+Extract the zip and run `MacKeys.exe` — that's it.
+
 ## Requirements
 
 - Windows 10/11
 - [.NET 10 Runtime](https://dotnet.microsoft.com/download/dotnet/10.0)
 
-## Build
+## Build from Source
 
 ```powershell
 # Debug build
