@@ -3,16 +3,21 @@
 // Key mappings (when active):
 //   Left Win  (0x5B) ↔ Left Alt  (0xA4)   Swap — puts Cmd/Option in Windows positions
 //   Right Alt (0xA5) → Right Ctrl (0xA3)   Mac Right Option → Right Ctrl
-//   Right Win (0x5C) → Right Alt  (0xA5)   Mac Right Cmd    → Right Alt
+//   Right Win (0x5C) → Left Alt  (0xA4)    Mac Right Cmd    → Left Alt
 //
 // The left-side swap makes Command land where Alt is physically on a Windows keyboard
 // (and vice versa), so Alt+Tab, Alt+F4, etc. work from the key you'd expect.
 // The right-side remaps produce the standard Windows right modifier layout.
 //
+// Right Cmd intentionally maps to VK_LMENU (Left Alt) rather than VK_RMENU (Right Alt).
+// On non-US keyboard layouts, VK_RMENU is AltGr (= Ctrl+Alt), so injecting it breaks
+// Alt+key combos (apps see Ctrl+Alt+key). VK_LMENU is always plain Alt with no AltGr.
+//
 // Injected keystrokes carry the LLKHF_INJECTED flag set by the OS, which the hook
 // checks to avoid re-intercepting its own output (prevents infinite loops).
 
 using System;
+using System.Collections.Generic;
 using System.Diagnostics;
 using System.Drawing;
 using System.Drawing.Drawing2D;
@@ -122,6 +127,9 @@ static class Program
 
     static IntPtr              _hookId    = IntPtr.Zero;
     static readonly LowLevelKeyboardProc _hookProc = HookCallback; // prevent GC
+    // Tracks which injected modifier VKs are currently "down" so Unhook() can
+    // release them before the hook is removed, preventing stuck modifiers.
+    static readonly HashSet<ushort> _heldInjected = new();
     static NotifyIcon          _trayIcon  = null!;
     static ToolStripMenuItem   _toggleItem = null!;
     static bool                _enabled;
@@ -212,6 +220,12 @@ static class Program
     static void Unhook()
     {
         if (_hookId == IntPtr.Zero) return;
+        // Release any injected modifiers still logically held down.
+        // Without this, toggling off (or exiting) while a physical modifier is held
+        // leaves the injected key-down with no matching key-up, permanently sticking it.
+        foreach (var vk in _heldInjected)
+            SendKey(vk, keyUp: true);
+        _heldInjected.Clear();
         UnhookWindowsHookEx(_hookId);
         _hookId = IntPtr.Zero;
     }
@@ -238,13 +252,15 @@ static class Program
                         VK_LWIN  => VK_LMENU,     // Left Cmd  → Left Alt
                         VK_LMENU => VK_LWIN,      // Left Opt  → Left Win
                         VK_RMENU => VK_RCONTROL,   // Right Opt → Right Ctrl
-                        VK_RWIN  => VK_RMENU,      // Right Cmd → Right Alt
+                        VK_RWIN  => VK_LMENU,      // Right Cmd → Left Alt (not VK_RMENU/AltGr)
                         _        => null
                     };
 
                     if (replacement is ushort vk)
                     {
                         SendKey(vk, isUp);
+                        if (isDown) _heldInjected.Add(vk);
+                        else        _heldInjected.Remove(vk);
                         return (IntPtr)1; // suppress the original keystroke
                     }
                 }
@@ -260,13 +276,27 @@ static class Program
     {
         var input = new INPUT { type = INPUT_KEYBOARD };
         input.u.ki.wVk    = vk;
+        input.u.ki.wScan  = ScanCode(vk);
         input.u.ki.dwFlags = (keyUp ? KEYEVENTF_KEYUP : 0u)
                            | (IsExtended(vk) ? KEYEVENTF_EXTENDEDKEY : 0u);
 
         SendInput(1, [input], Marshal.SizeOf<INPUT>());
     }
 
-    static bool IsExtended(ushort vk) => vk is VK_LWIN or VK_RWIN or VK_RMENU or VK_RCONTROL;
+    // Scan codes for the keys we inject. Other hooks and some apps (Windows Terminal
+    // included) read wScan from the KBDLLHOOKSTRUCT; a zero scan code can prevent
+    // the Alt key from being recognised as a modifier.
+    static ushort ScanCode(ushort vk) => vk switch
+    {
+        VK_LMENU    => 0x38,   // Alt (left, non-extended)
+        VK_LWIN     => 0x5B,   // Left Win (extended)
+        VK_RCONTROL => 0x1D,   // Right Ctrl (extended)
+        _           => 0
+    };
+
+    // VK_LMENU (Left Alt) is NOT an extended key — it has its own dedicated scan code.
+    // VK_RMENU is no longer injected (Right Cmd maps to VK_LMENU to avoid AltGr).
+    static bool IsExtended(ushort vk) => vk is VK_LWIN or VK_RWIN or VK_RCONTROL;
 
     // ── Tray icon generation ─────────────────────────────────────────────
 

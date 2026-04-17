@@ -13,9 +13,11 @@ When you RDP into Windows from a Mac, the modifier keys are in the wrong positio
 | Left Command | Left Win | **Left Alt** |
 | Left Option | Left Alt | **Left Win** |
 | Right Option | Right Alt | **Right Ctrl** |
-| Right Command | Right Win | **Right Alt** |
+| Right Command | Right Win | **Left Alt** |
 
 The left-side swap means **Cmd+Tab** does **Alt+Tab**, **Cmd+W** does **Alt+F4**, etc. — just like you'd expect on a Mac.
+
+> Right Cmd maps to **Left Alt** (not Right Alt) on purpose — on non-US keyboard layouts, Right Alt is treated as AltGr (= Ctrl+Alt), which breaks Alt+key combos. Left Alt is always plain Alt.
 
 ## Features
 
@@ -43,6 +45,21 @@ Extract the zip and run `MacKeys.exe` — that's it.
 
 - Windows 10/11
 - [.NET 10 Runtime](https://dotnet.microsoft.com/download/dotnet/10.0)
+
+## Important: Windows App (Microsoft Remote Desktop) on Mac
+
+If you connect from Mac using the **Windows App** (formerly Microsoft Remote Desktop), it ships with a feature that intercepts `⌘C`, `⌘V`, `⌘X`, `⌘A`, `⌘Z`, and `⌘F` and translates them to `Ctrl+C/V/X/A/Z/F` **before** keystrokes reach Windows. This bypasses MacKeys entirely — Right Cmd combos won't get remapped because they never arrive as Cmd on the Windows side.
+
+**To fix this:**
+
+1. Open **Windows App → Settings → Keyboard**
+2. Find the **"Redirect shortcuts when using"** dropdown
+3. Set it to **"Left Command (⌘) key"** (not "Either")
+    - This lets Left Cmd still auto-translate to Ctrl for familiar Mac-style copy/paste
+    - Right Cmd now passes through raw, so MacKeys can remap it to Alt
+4. **Disconnect and reconnect the RDP session** — the setting change does not take effect on the current session
+
+If you'd rather MacKeys handle *all* Cmd keys (both sides), set the dropdown to **"None"** or disable each individual toggle (Copy, Cut, Paste, Select All, Undo, Find).
 
 ## Build from Source
 
