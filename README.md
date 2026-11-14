@@ -27,6 +27,7 @@ The left-side swap means **Cmd+Tab** does **Alt+Tab**, **Cmd+W** does **Alt+F4**
 - Persists toggle state across restarts
 - No external dependencies — pure .NET + P/Invoke
 - Runs elevated (required for the keyboard hook to work across all windows)
+- Recovers by itself when Windows goes on without its keyboard hook, instead of leaving a modifier stuck down (see [Self-repair](#self-repair))
 
 ## Download
 
@@ -60,6 +61,17 @@ If you connect from Mac using the **Windows App** (formerly Microsoft Remote Des
 4. **Disconnect and reconnect the RDP session** — the setting change does not take effect on the current session
 
 If you'd rather MacKeys handle *all* Cmd keys (both sides), set the dropdown to **"None"** or disable each individual toggle (Copy, Cut, Paste, Select All, Undo, Find).
+
+## Self-repair
+
+Windows gives a keyboard hook a short deadline for every keystroke. If MacKeys answers late — the PC is under heavy load, or it was paged out while the RDP session sat disconnected — Windows lets that keystroke through un-remapped, and may stop calling the hook altogether without telling the app. MacKeys handles this in four ways:
+
+- A key-up is let through whenever Windows thinks that key is down, so a key-down that slipped past the hook can never stay stuck.
+- A watchdog notices a remapped key reaching Windows while the hook saw nothing. It then checks whether Windows still calls the hook, and reinstalls the hook only if it does not. After a reinstall the tray tooltip reads `MacKeys: ON (hook repaired 1x, see MacKeys.log)`.
+- When you lock the PC, answer a UAC prompt, or disconnect and reconnect the RDP session, every modifier MacKeys is holding down is released.
+- When MacKeys itself could not run for more than half a second, it releases every modifier it is holding down, because it may have missed the key-up. If you were still holding the key, press it again.
+
+Whenever the watchdog steps in or modifiers are released this way, a line is written to `MacKeys.log` next to the executable. The file stays absent as long as nothing went wrong.
 
 ## Build from Source
 
