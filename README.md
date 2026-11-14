@@ -45,7 +45,8 @@ Extract the zip and run `MacKeys.exe` — that's it.
 ## Requirements
 
 - Windows 10/11
-- [.NET 10 Runtime](https://dotnet.microsoft.com/download/dotnet/10.0)
+- The release downloads include the .NET runtime and need nothing else
+- Building from source needs the [.NET 11 SDK](https://dotnet.microsoft.com/download/dotnet/11.0). What `build.ps1` produces does not include the runtime, so it needs the .NET 11 Desktop Runtime from the same page
 
 ## Important: Windows App (Microsoft Remote Desktop) on Mac
 
